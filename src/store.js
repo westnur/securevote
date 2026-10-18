@@ -1,14 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 
-// Off-chain data: accounts, poll metadata and the participation list.
+// Off-chain data: accounts, poll metadata and the list of who received ballots.
 // Votes themselves live only on the blockchain.
 class Store {
   constructor(file) {
     this.file = file;
-    this.data = fs.existsSync(file)
-      ? JSON.parse(fs.readFileSync(file, 'utf8'))
-      : { users: [], polls: [], participation: [], leads: [] };
+    this.data = { users: [], polls: [], participation: [], leads: [] };
+    if (fs.existsSync(file)) Object.assign(this.data, JSON.parse(fs.readFileSync(file, 'utf8')));
   }
 
   save() {

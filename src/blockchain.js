@@ -1,93 +1,138 @@
+// Permissioned blockchain: SHA-256 hash chain + Merkle roots + light proof-of-work,
+// with every block signed by a set of validator nodes (Proof-of-Authority, 2-of-3).
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { EventEmitter } = require('events');
 
-const DIFFICULTY = 3; // number of leading zeros required by proof-of-work
+const DIFFICULTY = 3;
 const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
-class Block {
-  constructor(index, timestamp, transactions, previousHash, nonce = 0) {
-    this.index = index;
-    this.timestamp = timestamp;
-    this.transactions = transactions;
-    this.previousHash = previousHash;
-    this.nonce = nonce;
-    this.hash = this.computeHash();
+function merkleRoot(transactions) {
+  let level = transactions.map((t) => sha256(JSON.stringify(t)));
+  if (!level.length) return sha256('');
+  while (level.length > 1) {
+    const next = [];
+    for (let i = 0; i < level.length; i += 2) next.push(sha256(level[i] + (level[i + 1] ?? level[i])));
+    level = next;
+  }
+  return level[0];
+}
+
+const blockHash = (b) => sha256(`${b.index}|${b.timestamp}|${b.merkleRoot}|${b.previousHash}|${b.nonce}|${b.proposer}`);
+
+function mine(block) {
+  const target = '0'.repeat(DIFFICULTY);
+  block.nonce = 0;
+  block.hash = blockHash(block);
+  while (!block.hash.startsWith(target)) {
+    block.nonce++;
+    block.hash = blockHash(block);
+  }
+  return block;
+}
+
+class Validator {
+  constructor({ id, name, location, publicKey, privateKey }) {
+    Object.assign(this, { id, name, location, publicKey });
+    this.key = crypto.createPrivateKey(privateKey);
   }
 
-  computeHash() {
-    return sha256(
-      this.index + this.timestamp + JSON.stringify(this.transactions) + this.previousHash + this.nonce
-    );
+  static create(id, name, location) {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+    return {
+      id, name, location,
+      publicKey: publicKey.export({ type: 'spki', format: 'pem' }),
+      privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    };
   }
 
-  mine(difficulty) {
-    const target = '0'.repeat(difficulty);
-    while (!this.hash.startsWith(target)) {
-      this.nonce++;
-      this.hash = this.computeHash();
-    }
+  sign(hash) {
+    return { validator: this.id, signature: crypto.sign(null, Buffer.from(hash), this.key).toString('base64') };
   }
 }
 
-class Blockchain {
-  constructor(file) {
+class Blockchain extends EventEmitter {
+  constructor(file, validators) {
+    super();
     this.file = file;
     this.difficulty = DIFFICULTY;
-    this.chain = this.load() || [this.createGenesis()];
-    this.save();
-  }
-
-  createGenesis() {
-    const genesis = new Block(0, '2026-01-01T00:00:00.000Z', [{ type: 'GENESIS', note: 'SecureVote ledger' }], '0');
-    genesis.mine(this.difficulty);
-    return genesis;
-  }
-
-  load() {
-    if (!fs.existsSync(this.file)) return null;
-    const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-    return raw.map((b) => Object.assign(Object.create(Block.prototype), b));
+    this.validators = validators.map((v) => new Validator(v));
+    this.chain = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [];
+    if (!this.chain.length) {
+      this.append([{
+        type: 'GENESIS',
+        note: 'SecureVote corporate voting ledger',
+        validators: this.validators.map(({ id, name, location, publicKey }) => ({ id, name, location, publicKey })),
+        quorum: 2,
+      }], '2026-01-01T00:00:00.000Z');
+    }
   }
 
   save() {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    fs.writeFileSync(this.file, JSON.stringify(this.chain, null, 2));
+    fs.writeFileSync(this.file, JSON.stringify(this.chain));
   }
 
   get latest() {
     return this.chain[this.chain.length - 1];
   }
 
-  // Every write is mined into its own block immediately, so results are final at once.
-  addTransaction(tx) {
-    const transaction = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), ...tx };
-    const block = new Block(this.chain.length, new Date().toISOString(), [transaction], this.latest.hash);
-    block.mine(this.difficulty);
+  append(transactions, timestamp = new Date().toISOString()) {
+    const index = this.chain.length;
+    const block = mine({
+      index,
+      timestamp,
+      transactions,
+      merkleRoot: merkleRoot(transactions),
+      previousHash: index ? this.latest.hash : '0'.repeat(64),
+      proposer: this.validators[index % this.validators.length].id,
+      nonce: 0,
+    });
+    block.signatures = this.validators.map((v) => v.sign(block.hash));
     this.chain.push(block);
     this.save();
-    return { transaction, block };
+    this.emit('block', block);
+    return block;
+  }
+
+  // Each write is sealed in its own block right away — results are final instantly.
+  addTransaction(tx) {
+    const transaction = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), ...tx };
+    return { transaction, block: this.append([transaction]) };
   }
 
   transactions(filter = () => true) {
-    return this.chain.flatMap((b) => b.transactions.map((t) => ({ ...t, blockIndex: b.index, blockHash: b.hash }))).filter(filter);
+    const out = [];
+    for (const b of this.chain) for (const t of b.transactions) if (filter(t)) out.push({ ...t, blockIndex: b.index, blockHash: b.hash });
+    return out;
   }
 
-  static validate(chain, difficulty = DIFFICULTY) {
-    const target = '0'.repeat(difficulty);
+  static validate(chain) {
+    const genesis = chain[0]?.transactions?.[0];
+    if (!genesis || genesis.type !== 'GENESIS') return { valid: false, brokenAt: 0, reason: 'Genesis block is missing' };
+    const keys = Object.fromEntries(genesis.validators.map((v) => [v.id, crypto.createPublicKey(v.publicKey)]));
+    const target = '0'.repeat(DIFFICULTY);
+
     for (let i = 0; i < chain.length; i++) {
       const b = chain[i];
-      const recomputed = Block.prototype.computeHash.call(b);
-      if (b.hash !== recomputed) return { valid: false, brokenAt: i, reason: 'Block contents do not match its hash' };
+      if (merkleRoot(b.transactions) !== b.merkleRoot) return { valid: false, brokenAt: i, reason: 'Transactions do not match the Merkle root' };
+      if (blockHash(b) !== b.hash) return { valid: false, brokenAt: i, reason: 'Block header does not match its hash' };
       if (!b.hash.startsWith(target)) return { valid: false, brokenAt: i, reason: 'Proof-of-work is missing' };
-      if (i > 0 && b.previousHash !== chain[i - 1].hash) return { valid: false, brokenAt: i, reason: 'Link to previous block is broken' };
+      if (i > 0 && b.previousHash !== chain[i - 1].hash) return { valid: false, brokenAt: i, reason: 'Link to the previous block is broken' };
+      const good = new Set(
+        (b.signatures || [])
+          .filter((s) => keys[s.validator] && crypto.verify(null, Buffer.from(b.hash), keys[s.validator], Buffer.from(s.signature, 'base64')))
+          .map((s) => s.validator)
+      );
+      if (good.size < genesis.quorum) return { valid: false, brokenAt: i, reason: `Only ${good.size} of ${genesis.validators.length} validator signatures are valid` };
     }
     return { valid: true, blocks: chain.length };
   }
 
   verify() {
-    return Blockchain.validate(this.chain, this.difficulty);
+    return Blockchain.validate(this.chain);
   }
 }
 
-module.exports = { Blockchain, Block, sha256 };
+module.exports = { Blockchain, Validator, sha256, merkleRoot, blockHash, mine };

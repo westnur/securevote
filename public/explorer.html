@@ -4,36 +4,57 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SecureVote — Ledger Explorer</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
+  <script src="/js/theme.js"></script>
 </head>
 <body>
   <nav class="nav">
     <div class="container">
-      <a href="/" class="logo"><span class="logo-mark">✓</span> SecureVote</a>
-      <div class="nav-links"><a href="/">Home</a><a href="/app" class="btn btn-sm">Dashboard</a></div>
+      <a href="/" class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></span>SecureVote</a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/explorer">Ledger</a>
+        <button id="theme-btn" class="theme-btn" aria-label="Toggle theme"></button>
+        <a href="/app" class="btn btn-sm">Dashboard</a>
+      </div>
     </div>
   </nav>
-  <main class="container app-wrap">
-    <h1>Public ledger explorer</h1>
-    <p class="muted">Every token issue, poll and anonymous ballot is a block in this chain. Anyone can audit it.</p>
-    <div class="grid grid-2" style="margin:24px 0">
-      <div class="card">
-        <h3>Integrity check</h3>
-        <p>Recompute every block hash and link from genesis to the latest block.</p>
-        <button id="verify" class="btn" style="margin-top:14px">Verify entire chain</button>
-        <div id="verify-msg" style="margin-top:14px"></div>
-      </div>
-      <div class="card">
-        <h3>Tamper simulation</h3>
-        <p>See what happens if someone secretly multiplies a recorded vote's weight by 100 (run on a copy).</p>
-        <button id="tamper" class="btn btn-danger" style="margin-top:14px">Simulate attack</button>
-        <div id="tamper-msg" style="margin-top:14px"></div>
+  <main class="container" style="padding:36px 0 72px">
+    <div class="spread page-head">
+      <div><h1>Public ledger explorer</h1><p class="muted" style="margin:0">Every token issue, poll and anonymous ballot — publicly auditable by anyone.</p></div>
+      <span class="row small muted"><span class="live-dot"></span> Live</span>
+    </div>
+
+    <div class="grid grid-4" id="kpis" style="margin-bottom:20px"></div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="spread"><h3 style="margin:0">The chain</h3><span class="small muted">Newest first · click a block to inspect it</span></div>
+      <div class="chain-strip" id="strip" style="margin-top:14px"></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);align-items:start" id="cols">
+      <div class="card" id="detail"></div>
+      <div style="display:grid;gap:20px">
+        <div class="card">
+          <h3>Integrity check</h3>
+          <p class="small">Recompute every Merkle root, hash, proof-of-work, link and validator signature from genesis.</p>
+          <button id="verify" class="btn btn-grad btn-block">Verify entire chain</button>
+          <div id="verify-msg" style="margin-top:14px"></div>
+        </div>
+        <div class="card">
+          <h3>Attack simulation</h3>
+          <p class="small">Multiply a recorded ballot's weight by 100 — first naively, then like a skilled attacker who rebuilds the Merkle root and re-mines the block. Runs on a copy.</p>
+          <button id="tamper" class="btn btn-danger btn-block">Simulate attack</button>
+          <div id="tamper-msg" style="margin-top:14px"></div>
+        </div>
+        <div class="card"><h3>Validator nodes</h3><div id="validators"></div></div>
       </div>
     </div>
-    <h2 id="chain-title">Blocks</h2>
-    <div id="blocks"></div>
   </main>
+  <script src="/js/common.js"></script>
   <script src="/js/explorer.js"></script>
 </body>
 </html>

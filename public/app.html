@@ -4,49 +4,57 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SecureVote — Dashboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
+  <script src="/js/theme.js"></script>
 </head>
 <body>
   <nav class="nav">
-    <div class="container">
-      <a href="/" class="logo"><span class="logo-mark">✓</span> SecureVote</a>
+    <div class="container" style="width:auto;margin:0 clamp(16px,3vw,32px)">
+      <a href="/" class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></span>SecureVote</a>
       <div class="nav-links">
-        <a href="/explorer">Ledger</a>
-        <span id="nav-user" class="muted hidden"></span>
-        <button id="logout" class="btn btn-outline btn-sm hidden">Sign out</button>
+        <span id="live" class="row small muted hidden" style="gap:8px;margin-right:8px"><span class="live-dot"></span>Live</span>
+        <a href="/explorer">Ledger explorer</a>
+        <button id="theme-btn" class="theme-btn" aria-label="Toggle theme"></button>
       </div>
     </div>
   </nav>
 
-  <main class="container app-wrap">
-    <!-- Login -->
-    <div id="login-view" class="login-box hidden">
-      <form id="login-form" class="card">
-        <h2>Sign in to SecureVote</h2>
-        <p class="muted" style="margin-top:-4px">Access your organization's voting workspace.</p>
-        <div id="login-msg"></div>
-        <div class="field"><label for="email">Email</label><input id="email" type="email" required /></div>
-        <div class="field"><label for="password">Password</label><input id="password" type="password" required /></div>
-        <button class="btn" style="width:100%">Sign in</button>
-      </form>
-      <div class="card demo-accounts" style="margin-top:16px">
-        <strong>Demo accounts</strong>
-        <p class="muted" style="margin:4px 0 6px">Click to fill in credentials:</p>
-        <button class="btn btn-outline btn-sm demo" data-email="admin@securevote.io" data-pass="admin123">Admin (secretary)</button>
-        <button class="btn btn-outline btn-sm demo" data-email="alice@securevote.io" data-pass="demo123">Alice · 5,000 shares</button>
-        <button class="btn btn-outline btn-sm demo" data-email="bob@securevote.io" data-pass="demo123">Bob · 3,000 shares</button>
-        <button class="btn btn-outline btn-sm demo" data-email="carol@securevote.io" data-pass="demo123">Carol · 2,000 shares</button>
+  <div id="login-view" class="login-wrap hidden">
+    <div class="login-art">
+      <h2>Governance you can prove.</h2>
+      <p>Every ballot you cast here is blind-signed, anonymous and sealed in a blockchain signed by three independent validators.</p>
+      <div class="chain-visual" style="margin-top:28px">
+        <div class="chain-card"><div class="spread"><strong>RSA blind signature</strong><span class="sig">eligibility ✓</span></div><div class="tx-line">The server signs your ballot without seeing it.</div></div>
+        <div class="chain-card"><div class="spread"><strong>Anonymous submission</strong><span class="sig">no login</span></div><div class="tx-line">Ballots reach the ledger with no identity attached.</div></div>
+        <div class="chain-card"><div class="spread"><strong>2-of-3 validators</strong><span class="sig">Ed25519</span></div><div class="tx-line">History cannot be rewritten by any single party.</div></div>
       </div>
     </div>
-
-    <!-- Dashboard -->
-    <div id="dash-view" class="hidden">
-      <div class="grid grid-3" style="margin-bottom:24px" id="summary"></div>
-      <div class="tabs" id="tabs"></div>
-      <div id="tab-content"></div>
+    <div class="login-form">
+      <div>
+        <h1 style="font-size:1.8rem">Welcome back</h1>
+        <p class="muted">Sign in to your organization's voting workspace.</p>
+        <form id="login-form">
+          <div id="login-msg"></div>
+          <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="username" required /></div>
+          <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required /></div>
+          <button class="btn btn-grad btn-block btn-lg">Sign in</button>
+        </form>
+        <p class="small muted" style="margin:26px 0 0">Demo accounts — click to sign in instantly:</p>
+        <div class="demo-grid" id="demo-grid"></div>
+      </div>
     </div>
-  </main>
+  </div>
+
+  <div id="shell" class="shell hidden">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main" id="main"></main>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/blind.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

@@ -1,59 +1,89 @@
-# SecureVote — Secure Corporate Voting on the Blockchain
+# SecureVote — Tamper-proof Corporate Voting on the Blockchain
 
-SecureVote is a full-stack web platform for shareholder voting. Each shareholder receives digital
-voting tokens proportional to their stake (1 share = 1 token). Ballots are anonymous, results are
-recorded instantly, and every vote is sealed in a tamper-evident blockchain ledger.
+SecureVote is a full-stack platform for shareholder voting. Every share becomes a digital voting
+token, ballots are **cryptographically anonymous** (RSA blind signatures), results are final the
+moment they are cast, and every ballot is sealed in a blockchain signed by independent validator nodes.
+
+## Features
+**Security & blockchain (backend)**
+- **RSA blind signatures (Chaum):** the server certifies a shareholder's ballots without seeing them,
+  so even the platform operator cannot link a vote to a person.
+- **Anonymous submission:** ballots are submitted with *no login*, after a random delay.
+- **Token-weighted voting:** tokens are split into denominations (1, 10, 100, 1,000 …); each becomes a
+  blind-signed ballot. **Split voting** across options is supported.
+- **Nullifiers** prevent any ballot token from being used twice.
+- **Permissioned blockchain:** SHA-256 hash chain, Merkle roots, light proof-of-work, and
+  **Ed25519 signatures from 3 validator nodes** (2-of-3 required).
+- **Governance rules:** quorum, ordinary (> 50%) and special (≥ 2/3) resolutions, elections; polls
+  close automatically and the final result is written on-chain.
+- **Verifiable receipts** and a one-click **audit report** (printable / PDF) for every poll.
+- **Live updates** via Server-Sent Events, login rate-limiting, session expiry, security headers (CSP).
+
+**Frontend**
+- Landing page: problem, comparison, how it works, security architecture, target markets,
+  **ROI calculator**, B2B pricing (per-vote / subscription), FAQ, lead form.
+- Dashboard (admin & shareholder): KPIs, ownership donut chart, live ledger feed, results with quorum
+  bars, step-by-step voting animation, receipts, token wallet, poll templates, shareholder register.
+- Ledger explorer: visual chain, block inspector, full integrity check, two attack simulations.
+- Light / dark theme, fully responsive.
 
 ## Tech stack
-- **Backend:** Node.js + Express, REST API, custom blockchain (SHA-256 hash chain + proof-of-work)
-- **Frontend:** HTML, CSS, vanilla JavaScript (landing page, dashboard, ledger explorer)
-- **Storage:** JSON files in `data/` (created automatically)
+Node.js · Express · Node `crypto` (RSA, Ed25519, SHA-256) · BigInt · vanilla HTML/CSS/JS · Web Crypto API.
+No database server needed — data is stored as JSON in `data/` (created automatically).
 
 ## Run
 ```bash
 npm install
 npm start          # http://localhost:3000
 ```
+> Windows PowerShell: if you see "выполнение сценариев отключено", use `npm.cmd install` and `npm.cmd start`.
 
 ## Demo accounts
 | Role | Email | Password |
 |------|-------|----------|
 | Admin (corporate secretary) | admin@securevote.io | admin123 |
-| Shareholder, 5,000 shares | alice@securevote.io | demo123 |
-| Shareholder, 3,000 shares | bob@securevote.io | demo123 |
-| Shareholder, 2,000 shares | carol@securevote.io | demo123 |
+| Alice — 4,000 shares | alice@securevote.io | demo123 |
+| Bob — 2,500 shares | bob@securevote.io | demo123 |
+| Carol — 1,500 shares | carol@securevote.io | demo123 |
+| David — 1,200 shares (already voted) | david@securevote.io | demo123 |
+| Emma — 800 shares (already voted) | emma@securevote.io | demo123 |
 
 Delete the `data/` folder to reset the demo.
 
-## Pages
-- `/` — landing page: problem, solution, target markets, B2B pricing, contact form
-- `/app` — dashboard. Admin: create polls, close polls, add shareholders (mints tokens), view leads.
-  Shareholder: vote with token weight, get a private receipt, verify the vote on-chain.
-- `/explorer` — public block explorer, full-chain integrity check, tamper simulation
+## How an anonymous vote works
+1. The browser creates random ballot tokens worth exactly the holder's balance.
+2. Each token is **blinded** with a secret random factor `r`: `m' = H(token) · rᵉ mod n`.
+3. Signed in, the shareholder sends the blinded tokens; the server checks eligibility and returns `s' = m'ᵈ mod n`.
+4. The browser **unblinds**: `s = s' · r⁻¹ mod n` — a valid signature on a token the server never saw.
+5. Without logging in, the browser submits `{token, s, choice}`. The server verifies `sᵉ ≡ H(token)` and
+   the one-time nullifier, then seals the ballot in a block signed by the validators.
 
-## How security works
-- **Immutability:** every action (token issue, poll creation, vote, poll close) is mined into a block
-  containing the hash of the previous block. Editing any vote changes its hash and breaks the chain.
-- **Anonymity:** a VOTE transaction stores only the poll, the choice, the token weight and a receipt hash —
-  no name, email or wallet address. Who has voted is tracked separately (off-chain) only to prevent double voting.
-- **Verifiability:** the voter gets a random secret; its SHA-256 hash is the receipt stored on-chain,
-  so the voter can prove their ballot was counted without revealing identity.
-- **Results** are always tallied directly from the blockchain.
+## Project structure
+```
+server.js            REST API, voting protocol, live events
+src/blockchain.js    blocks, Merkle roots, PoW, validator signatures, validation
+src/rsa-blind.js     RSA blind-signature scheme (server side)
+src/store.js         off-chain storage (users, polls, leads)
+public/              index (landing), app (dashboard), explorer, audit
+public/js/blind.js   blind-signature client (browser side)
+```
 
 ## API overview
 | Method | Endpoint | Access |
 |--------|----------|--------|
-| POST | /api/auth/login | public |
+| POST | /api/auth/login, /api/auth/logout | public / signed in |
 | GET | /api/me | signed in |
 | GET/POST | /api/shareholders | admin |
 | GET | /api/polls, /api/polls/:id | signed in |
-| POST | /api/polls | admin |
-| POST | /api/polls/:id/close | admin |
-| POST | /api/polls/:id/vote | shareholder |
-| GET | /api/chain, /api/chain/verify, /api/chain/tamper-demo | public |
+| POST | /api/polls, /api/polls/:id/close | admin |
+| GET | /api/blind/keys | public |
+| POST | /api/polls/:id/credentials | shareholder (blinded tokens) |
+| POST | /api/ballots | **anonymous** |
 | POST | /api/receipts/verify | public |
-| GET | /api/stats | public |
-| POST | /api/leads (GET: admin) | public |
+| GET | /api/polls/:id/audit | public |
+| GET | /api/chain, /api/chain/blocks/:i, /api/chain/verify, /api/chain/tamper-demo | public |
+| GET | /api/stats, /api/activity, /api/events (SSE) | public |
+| POST / GET | /api/leads | public / admin |
 
-> Note: this is an MVP/demo. A production version would run on a distributed network of nodes
-> (e.g. Hyperledger Fabric or an Ethereum L2) and use cryptographic anonymity (blind signatures / zk-proofs).
+> This is an MVP. In production the validator nodes would run on separate servers operated by
+> independent parties, and keys would live in hardware security modules.
