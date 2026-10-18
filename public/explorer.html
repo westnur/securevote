@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SecureVote — Ledger Explorer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="container">
+      <a href="/" class="logo"><span class="logo-mark">✓</span> SecureVote</a>
+      <div class="nav-links"><a href="/">Home</a><a href="/app" class="btn btn-sm">Dashboard</a></div>
+    </div>
+  </nav>
+  <main class="container app-wrap">
+    <h1>Public ledger explorer</h1>
+    <p class="muted">Every token issue, poll and anonymous ballot is a block in this chain. Anyone can audit it.</p>
+    <div class="grid grid-2" style="margin:24px 0">
+      <div class="card">
+        <h3>Integrity check</h3>
+        <p>Recompute every block hash and link from genesis to the latest block.</p>
+        <button id="verify" class="btn" style="margin-top:14px">Verify entire chain</button>
+        <div id="verify-msg" style="margin-top:14px"></div>
+      </div>
+      <div class="card">
+        <h3>Tamper simulation</h3>
+        <p>See what happens if someone secretly multiplies a recorded vote's weight by 100 (run on a copy).</p>
+        <button id="tamper" class="btn btn-danger" style="margin-top:14px">Simulate attack</button>
+        <div id="tamper-msg" style="margin-top:14px"></div>
+      </div>
+    </div>
+    <h2 id="chain-title">Blocks</h2>
+    <div id="blocks"></div>
+  </main>
+  <script src="/js/explorer.js"></script>
+</body>
+</html>

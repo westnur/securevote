@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SecureVote — Blockchain Corporate Voting</title>
+  <meta name="description" content="Secure, anonymous and tamper-proof shareholder voting on the blockchain." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="container">
+      <a href="/" class="logo"><span class="logo-mark">✓</span> SecureVote</a>
+      <div class="nav-links">
+        <a href="#problem">Problem</a>
+        <a href="#how">How it works</a>
+        <a href="#markets">Who it's for</a>
+        <a href="#pricing">Pricing</a>
+        <a href="/explorer">Ledger</a>
+        <a href="/app" class="btn btn-sm">Sign in</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container hero-grid">
+      <div>
+        <span class="pill">Blockchain-powered governance</span>
+        <h1>Shareholder voting that can't be faked, lost or miscounted.</h1>
+        <p class="lead">SecureVote turns every share into a digital voting token. Ballots are anonymous, results are recorded instantly, and every vote is sealed in an immutable blockchain ledger.</p>
+        <div class="hero-actions">
+          <a href="/app" class="btn btn-lg">Try the live demo</a>
+          <a href="#contact" class="btn btn-outline btn-lg">Request a quote</a>
+        </div>
+      </div>
+      <div class="hero-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <strong>Live network status</strong>
+          <span id="chain-status" class="badge badge-active">Checking…</span>
+        </div>
+        <p class="muted" style="margin:0 0 12px;font-size:.9rem">Real-time data from this deployment's ledger</p>
+        <div class="stats" style="grid-template-columns:repeat(2,1fr)">
+          <div class="stat"><b id="s-blocks">–</b><span>Blocks</span></div>
+          <div class="stat"><b id="s-votes">–</b><span>Votes recorded</span></div>
+          <div class="stat"><b id="s-polls">–</b><span>Polls</span></div>
+          <div class="stat"><b id="s-supply">–</b><span>Voting tokens</span></div>
+        </div>
+        <a href="/explorer" class="btn btn-outline" style="width:100%;margin-top:8px">Open blockchain explorer →</a>
+      </div>
+    </div>
+  </header>
+
+  <section id="problem" class="alt">
+    <div class="container">
+      <div class="section-head">
+        <h2>Shareholder meetings are expensive — and still risky</h2>
+        <p>Traditional proxy voting relies on paper, intermediaries and manual counting. Companies pay for audits and still can't fully rule out errors.</p>
+      </div>
+      <div class="grid grid-3 problem">
+        <div class="card"><div class="icon">💸</div><h3>High audit costs</h3><p>Independent scrutineers, legal review and logistics make every general meeting a major expense.</p></div>
+        <div class="card"><div class="icon">⚠️</div><h3>Risk of manipulation</h3><p>Centralized vote counting leaves room for tampering, lost proxies and disputed results.</p></div>
+        <div class="card"><div class="icon">⏳</div><h3>Slow results</h3><p>Manual tallying takes days, and shareholders have no way to independently verify their vote was counted.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="container">
+      <div class="section-head">
+        <h2>How SecureVote works</h2>
+        <p>A purpose-built voting ledger that replaces trust in intermediaries with cryptographic proof.</p>
+      </div>
+      <div class="grid grid-4">
+        <div class="card"><div class="step-num">1</div><h3>Tokenize shares</h3><p>Each shareholder receives voting tokens proportional to their stake — 1 share = 1 token.</p></div>
+        <div class="card"><div class="step-num">2</div><h3>Open a resolution</h3><p>The corporate secretary publishes a poll. Its rules are hashed and written to the chain.</p></div>
+        <div class="card"><div class="step-num">3</div><h3>Vote anonymously</h3><p>Ballots are stored without identity. Each voter gets a private receipt to verify their vote.</p></div>
+        <div class="card"><div class="step-num">4</div><h3>Instant, final results</h3><p>Votes are mined into blocks immediately. Any edit breaks the hash chain and is detected.</p></div>
+      </div>
+      <div class="grid grid-3" style="margin-top:20px">
+        <div class="card"><div class="icon">🔒</div><h3>Tamper-proof</h3><p>SHA-256 hash chain with proof-of-work. Changing a single vote invalidates every block after it.</p></div>
+        <div class="card"><div class="icon">🕶️</div><h3>Anonymous</h3><p>The ledger records the choice and its weight — never the voter's name, email or wallet.</p></div>
+        <div class="card"><div class="icon">🔍</div><h3>Verifiable</h3><p>Anyone can audit the public ledger; every shareholder can confirm their own ballot with a receipt.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="markets" class="alt">
+    <div class="container">
+      <div class="section-head">
+        <h2>Built for every organization that votes</h2>
+        <p>From listed companies to residential associations — anywhere a decision must be fair and provable.</p>
+      </div>
+      <div class="grid grid-4">
+        <div class="card"><div class="icon">🏢</div><h3>Public companies</h3><p>Annual and extraordinary general meetings with weighted shareholder voting.</p></div>
+        <div class="card"><div class="icon">👔</div><h3>Boards of directors</h3><p>Fast, documented board resolutions between scheduled meetings.</p></div>
+        <div class="card"><div class="icon">🏘️</div><h3>Homeowner associations</h3><p>Transparent decisions on budgets, repairs and management for residents.</p></div>
+        <div class="card"><div class="icon">🤝</div><h3>Non-profits</h3><p>Member elections and policy votes with full auditability for donors.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing">
+    <div class="container">
+      <div class="section-head">
+        <h2>Simple B2B pricing</h2>
+        <p>Pay per vote for occasional meetings, or subscribe for unlimited governance all year.</p>
+      </div>
+      <div class="grid grid-3">
+        <div class="card price-card">
+          <h3>Pay per vote</h3>
+          <div class="price">$490 <small>/ voting event</small></div>
+          <p>For HOAs, non-profits and companies with one or two meetings a year.</p>
+          <ul><li>Up to 1,000 voters</li><li>Unlimited resolutions per event</li><li>Blockchain audit report</li><li>Email support</li></ul>
+          <a href="#contact" data-plan="Pay per vote" class="btn btn-outline plan-btn">Get started</a>
+        </div>
+        <div class="card price-card featured">
+          <h3>Annual subscription</h3>
+          <div class="price">$4,900 <small>/ year</small></div>
+          <p>For boards and companies that vote regularly.</p>
+          <ul><li>Unlimited voting events</li><li>Up to 10,000 voters</li><li>Board &amp; committee workspaces</li><li>Priority support &amp; onboarding</li></ul>
+          <a href="#contact" data-plan="Annual subscription" class="btn plan-btn">Start subscription</a>
+        </div>
+        <div class="card price-card">
+          <h3>Enterprise</h3>
+          <div class="price">Custom</div>
+          <p>For listed companies with large, distributed shareholder bases.</p>
+          <ul><li>Unlimited voters</li><li>Private / on-premise ledger nodes</li><li>Registrar &amp; depository integration</li><li>Dedicated account manager, SLA</li></ul>
+          <a href="#contact" data-plan="Enterprise" class="btn btn-outline plan-btn">Contact sales</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact" class="alt">
+    <div class="container" style="max-width:720px">
+      <div class="section-head">
+        <h2>Request a demo or quote</h2>
+        <p>Tell us about your organization and we'll get back to you within one business day.</p>
+      </div>
+      <form id="lead-form" class="card">
+        <div id="lead-msg"></div>
+        <div class="form-row">
+          <div class="field"><label for="l-name">Full name</label><input id="l-name" required /></div>
+          <div class="field"><label for="l-email">Work email</label><input id="l-email" type="email" required /></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="l-company">Organization</label><input id="l-company" /></div>
+          <div class="field"><label for="l-plan">Plan</label>
+            <select id="l-plan"><option>Pay per vote</option><option>Annual subscription</option><option>Enterprise</option></select>
+          </div>
+        </div>
+        <div class="field"><label for="l-message">Message</label><textarea id="l-message" rows="4" placeholder="Number of shareholders, meeting dates…"></textarea></div>
+        <button class="btn" type="submit">Send request</button>
+      </form>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <span>© 2026 SecureVote. Secure corporate governance on the blockchain.</span>
+      <span><a href="/app">Dashboard</a> · <a href="/explorer">Ledger explorer</a></span>
+    </div>
+  </footer>
+  <script src="/js/landing.js"></script>
+</body>
+</html>
