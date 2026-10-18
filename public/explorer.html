@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SecureVote — Ledger Explorer</title>
+  <title>SecureVote — Audit-trail Explorer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -16,7 +16,7 @@
       <a href="/" class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></span>SecureVote</a>
       <div class="nav-links">
         <a href="/">Home</a>
-        <a href="/explorer">Ledger</a>
+        <a href="/explorer">Audit trail</a>
         <button id="theme-btn" class="theme-btn" aria-label="Toggle theme"></button>
         <a href="/app" class="btn btn-sm">Dashboard</a>
       </div>
@@ -24,7 +24,7 @@
   </nav>
   <main class="container" style="padding:36px 0 72px">
     <div class="spread page-head">
-      <div><h1>Public ledger explorer</h1><p class="muted" style="margin:0">Every token issue, poll and anonymous ballot — publicly auditable by anyone.</p></div>
+      <div><h1>Audit-trail explorer</h1><p class="muted" style="margin:0">Every register entry, poll and ballot in order — with the evidence needed to check that nothing was changed.</p></div>
       <span class="row small muted"><span class="live-dot"></span> Live</span>
     </div>
 
@@ -46,7 +46,7 @@
         </div>
         <div class="card">
           <h3>Attack simulation</h3>
-          <p class="small">Multiply a recorded ballot's weight by 100 — first naively, then like a skilled attacker who rebuilds the Merkle root and re-mines the block. Runs on a copy.</p>
+          <p class="small">See how an unauthorized change is detected: a recorded ballot's weight is multiplied by 100 — first naively, then by an attacker who also rebuilds the Merkle root and re-mines the block. Runs on a copy.</p>
           <button id="tamper" class="btn btn-danger btn-block">Simulate attack</button>
           <div id="tamper-msg" style="margin-top:14px"></div>
         </div>

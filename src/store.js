@@ -6,7 +6,7 @@ const path = require('path');
 class Store {
   constructor(file) {
     this.file = file;
-    this.data = { users: [], polls: [], participation: [], leads: [] };
+    this.data = { org: null, users: [], polls: [], participation: [], leads: [], imports: [] };
     if (fs.existsSync(file)) Object.assign(this.data, JSON.parse(fs.readFileSync(file, 'utf8')));
   }
 

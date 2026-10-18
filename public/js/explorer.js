@@ -1,4 +1,4 @@
-const TYPE_LABEL = { GENESIS: 'Genesis', TOKEN_ISSUE: 'Token issue', POLL_CREATED: 'Poll opened', VOTE: 'Ballot', POLL_CLOSED: 'Poll closed' };
+const TYPE_LABEL = { GENESIS: 'Genesis', TOKEN_ISSUE: 'Voting weight', REGISTER_IMPORT: 'Register import', POLL_CREATED: 'Poll opened', VOTE: 'Ballot', POLL_CLOSED: 'Poll closed' };
 let blocks = [];
 let selected = null;
 let validators = [];
@@ -6,9 +6,12 @@ let validators = [];
 function describe(t) {
   switch (t.type) {
     case 'GENESIS': return `Ledger created with ${t.validators.length} validators; ${t.quorum} signatures required per block.`;
-    case 'TOKEN_ISSUE': return `${fmt(t.amount)} voting tokens minted to pseudonymous address ${t.holder}.`;
-    case 'POLL_CREATED': return `Poll “${esc(t.title)}” opened · ${t.kind} resolution · quorum ${t.quorum}% · options: ${t.options.map(esc).join(', ')}.`;
-    case 'VOTE': return `Anonymous submission of ${t.ballots.length} blind-signed ballot token(s): ${t.ballots.map((b) => `${fmt(b.weight)} → ${esc(b.choice)}`).join(', ')}. No voter identity is recorded.`;
+    case 'TOKEN_ISSUE': return `Voting weight ${fmt(t.amount)} registered for pseudonym ${t.holder}${t.source ? ` · source: ${esc(t.source)}` : ''}.`;
+    case 'REGISTER_IMPORT': return `Participant register imported from ${esc(t.fileName)}: ${t.rows} rows, total weight ${fmt(t.totalWeight)}. File fingerprint ${t.sourceHash}.`;
+    case 'POLL_CREATED': return `Poll “${esc(t.title)}” opened · ${t.kind === 'special' ? 'special majority' : 'simple majority'} · ${t.mode === 'open' ? 'roll-call vote' : 'secret ballot'} · quorum ${t.quorum}% · options: ${t.options.map(esc).join(', ')}.`;
+    case 'VOTE': return t.mode === 'open'
+      ? `Roll-call vote by pseudonym ${t.voter.slice(0, 16)}…: ${t.ballots.map((b) => `${fmt(b.weight)} → ${esc(b.choice)}`).join(', ')}.`
+      : `Secret ballot: ${t.ballots.length} blind-signed ballot token(s): ${t.ballots.map((b) => `${fmt(b.weight)} → ${esc(b.choice)}`).join(', ')}. No voter identity is recorded.`;
     case 'POLL_CLOSED': return `Poll closed — decision: <b>${esc(t.decision)}</b>, turnout ${pct(t.turnout, 1)}.`;
     default: return t.type;
   }
@@ -21,7 +24,7 @@ async function load(flashIndex) {
   const stats = await fetch('/api/stats').then((r) => r.json());
   $('#kpis').innerHTML = [
     ['Blocks', fmt(data.length)],
-    ['Anonymous submissions', fmt(stats.votes)],
+    ['Ballots recorded', fmt(stats.votes)],
     ['Proof-of-work difficulty', data.difficulty + ' leading zeros'],
     ['Validators', `${validators.length} · 2-of-3 quorum`],
   ].map(([l, v]) => `<div class="card kpi"><div class="label">${l}</div><div class="value" style="font-size:1.4rem">${v}</div></div>`).join('');
@@ -75,5 +78,5 @@ $('#tamper').addEventListener('click', async () => {
     <p class="small muted" style="margin:0">The real ledger was never touched.</p>`;
 });
 
-onBlocks((b) => { selected = null; load(b.index); toast(`New block #${b.index}`); });
+onBlocks((b) => { selected = null; load(b.index); toast(`New audit-trail entry #${b.index}`); });
 load();

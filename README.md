@@ -1,31 +1,46 @@
-# SecureVote — Tamper-proof Corporate Voting on the Blockchain
+# SecureVote — Verifiable Collective Decision-Making
 
-SecureVote is a full-stack platform for shareholder voting. Every share becomes a digital voting
-token, ballots are **cryptographically anonymous** (RSA blind signatures), results are final the
-moment they are cast, and every ballot is sealed in a blockchain signed by independent validator nodes.
+**SecureVote is a B2B platform for verifiable and procedurally correct collective decision-making**
+for organizations in Kazakhstan. It takes an organizer from agenda and participant register to quorum,
+results and draft minutes — with remote voting, verified voting weights, secret or roll-call ballots
+and an integrity-protected audit trail.
+
+> Clients don't buy blockchain — they buy a trusted, more cost-effective voting procedure with a
+> result anyone can verify.
+
+## Business model (indicative pilot pricing)
+| Plan | Price | For |
+|------|-------|-----|
+| Single vote | 150–400k ₸ / procedure | First test on one procedure |
+| Standard | 0.8–1.8M ₸ / year | Small organizations with regular votes |
+| Business | 2–5M ₸ / year | Several procedure types, extended audit, integrations |
+| Enterprise | 5–15M ₸ / year | Custom security, integrations, SLA |
+| Implementation | 0–3M ₸ one-time | Setup, migration, training |
+
+**Starting segment:** associations, unions, cooperatives and NGOs. Next: boards of directors;
+later: condominiums (OSI/KSK) and joint-stock companies.
 
 ## Features
-**Security & blockchain (backend)**
-- **RSA blind signatures (Chaum):** the server certifies a shareholder's ballots without seeing them,
-  so even the platform operator cannot link a vote to a person.
-- **Anonymous submission:** ballots are submitted with *no login*, after a random delay.
-- **Token-weighted voting:** tokens are split into denominations (1, 10, 100, 1,000 …); each becomes a
-  blind-signed ballot. **Split voting** across options is supported.
-- **Nullifiers** prevent any ballot token from being used twice.
-- **Permissioned blockchain:** SHA-256 hash chain, Merkle roots, light proof-of-work, and
-  **Ed25519 signatures from 3 validator nodes** (2-of-3 required).
-- **Governance rules:** quorum, ordinary (> 50%) and special (≥ 2/3) resolutions, elections; polls
-  close automatically and the final result is written on-chain.
-- **Verifiable receipts** and a one-click **audit report** (printable / PDF) for every poll.
-- **Live updates** via Server-Sent Events, login rate-limiting, session expiry, security headers (CSP).
+**Procedure**
+- Participant register: add participants or **import a CSV** (name, email, weight); the file's SHA-256
+  fingerprint is recorded in the audit trail as the data source.
+- Voting weight per participant — a technical representation of the voting right, **not shares**.
+- **Secret ballot** (RSA blind signatures — identity is kept separate from the choice) or
+  **roll-call vote** (choice linked to the participant, names visible to the organizer only).
+- Split voting, protection from repeat voting (nullifiers / participation list).
+- Quorum, simple (> 50%) and special (≥ 2/3) majority, elections; polls close automatically.
+- **Audit report** and **draft minutes in Kazakh, Russian and English** (printable / PDF).
+- Private receipts so a voter can confirm their secret ballot was counted.
 
-**Frontend**
-- Landing page: problem, comparison, how it works, security architecture, target markets,
-  **ROI calculator**, B2B pricing (per-vote / subscription), FAQ, lead form.
-- Dashboard (admin & shareholder): KPIs, ownership donut chart, live ledger feed, results with quorum
-  bars, step-by-step voting animation, receipts, token wallet, poll templates, shareholder register.
-- Ledger explorer: visual chain, block inspector, full integrity check, two attack simulations.
-- Light / dark theme, fully responsive.
+**Audit trail**
+- SHA-256 hash chain, Merkle roots, light proof-of-work, Ed25519 signatures from 3 validator nodes
+  (2-of-3). Later changes are **detected** (see the attack simulation in the explorer).
+- Personal data (names, emails) is stored off the trail; only pseudonyms and minimal metadata are recorded.
+
+**Website**
+- Landing: problem, value, how it works, segments, differentiation, trust & security (incl. what the
+  technology does *not* guarantee), savings estimate in ₸, pricing, pilot program, FAQ, pilot form.
+- Dashboard for organizer and participants, audit-trail explorer, light/dark theme, responsive.
 
 ## Tech stack
 Node.js · Express · Node `crypto` (RSA, Ed25519, SHA-256) · BigInt · vanilla HTML/CSS/JS · Web Crypto API.
@@ -41,19 +56,22 @@ npm start          # http://localhost:3000
 ## Demo accounts
 | Role | Email | Password |
 |------|-------|----------|
-| Admin (corporate secretary) | admin@securevote.io | admin123 |
-| Alice — 4,000 shares | alice@securevote.io | demo123 |
-| Bob — 2,500 shares | bob@securevote.io | demo123 |
-| Carol — 1,500 shares | carol@securevote.io | demo123 |
-| David — 1,200 shares (already voted) | david@securevote.io | demo123 |
-| Emma — 800 shares (already voted) | emma@securevote.io | demo123 |
+| Organizer (Board Secretary) | admin@securevote.io | admin123 |
+| Aigerim Sadykova — 4,000 votes | aigerim@securevote.io | demo123 |
+| Daniyar Akhmetov — 2,500 votes | daniyar@securevote.io | demo123 |
+| Madina Omarova — 1,500 votes | madina@securevote.io | demo123 |
+| Yerlan Nurlanov — 1,200 votes (already voted on the budget) | yerlan@securevote.io | demo123 |
+| Saule Bekova — 800 votes (already voted on the budget) | saule@securevote.io | demo123 |
 
-Delete the `data/` folder to reset the demo.
+The demo organization is **Steppe Agro Cooperative** (Almaty) with three agenda items: the 2027 budget
+(secret ballot), a Charter amendment (roll-call, 2/3 majority) and the election of the Chair (secret ballot).
 
-## How an anonymous vote works
-1. The browser creates random ballot tokens worth exactly the holder's balance.
+Run `npm run reset` (or `npm.cmd run reset` on Windows) to reset the demo. Data from an older version is moved to a backup folder automatically.
+
+## How a secret ballot works
+1. The browser creates random ballot tokens worth exactly the participant's voting weight.
 2. Each token is **blinded** with a secret random factor `r`: `m' = H(token) · rᵉ mod n`.
-3. Signed in, the shareholder sends the blinded tokens; the server checks eligibility and returns `s' = m'ᵈ mod n`.
+3. Signed in, the participant sends the blinded tokens; the server checks eligibility and returns `s' = m'ᵈ mod n`.
 4. The browser **unblinds**: `s = s' · r⁻¹ mod n` — a valid signature on a token the server never saw.
 5. Without logging in, the browser submits `{token, s, choice}`. The server verifies `sᵉ ≡ H(token)` and
    the one-time nullifier, then seals the ballot in a block signed by the validators.
@@ -77,13 +95,17 @@ public/js/blind.js   blind-signature client (browser side)
 | GET | /api/polls, /api/polls/:id | signed in |
 | POST | /api/polls, /api/polls/:id/close | admin |
 | GET | /api/blind/keys | public |
-| POST | /api/polls/:id/credentials | shareholder (blinded tokens) |
-| POST | /api/ballots | **anonymous** |
+| POST | /api/shareholders/import | admin (CSV register import) |
+| POST | /api/polls/:id/credentials | participant — secret ballot, blinded tokens |
+| POST | /api/ballots | secret ballot submission, **no login** |
+| POST | /api/polls/:id/vote | participant — roll-call vote |
 | POST | /api/receipts/verify | public |
 | GET | /api/polls/:id/audit | public |
 | GET | /api/chain, /api/chain/blocks/:i, /api/chain/verify, /api/chain/tamper-demo | public |
 | GET | /api/stats, /api/activity, /api/events (SSE) | public |
 | POST / GET | /api/leads | public / admin |
 
-> This is an MVP. In production the validator nodes would run on separate servers operated by
-> independent parties, and keys would live in hardware security modules.
+> This is an MVP for demonstration. The legal significance of results depends on following the
+> applicable procedure (law, charter, signatures). In production the validator nodes would be operated
+> by independent parties, keys would live in hardware security modules, and personal data would be
+> hosted in Kazakhstan where required.

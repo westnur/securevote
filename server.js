@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const SESSION_TTL = 8 * 3600e3;
 const THRESHOLDS = { ordinary: 0.5, special: 2 / 3 };
-const DATA_VERSION = 2;
+const DATA_VERSION = 3;
 
 // Data written by an older version of SecureVote has a different format.
 // Move it aside to a backup folder and start with fresh demo data.
@@ -149,6 +149,10 @@ const auth = (req, res, next) => {
   req.user = user;
   next();
 };
+const optionalUser = (req) => {
+  const s = sessions.get((req.headers.authorization || '').replace('Bearer ', ''));
+  return s && s.expires > Date.now() ? db.users.find((u) => u.id === s.userId) : null;
+};
 const adminOnly = (req, res, next) =>
   req.user.role === 'admin' ? next() : res.status(403).json({ error: 'Administrator access required' });
 
@@ -175,19 +179,48 @@ app.post('/api/auth/logout', auth, (req, res) => {
 
 app.get('/api/me', auth, (req, res) => res.json(publicUser(req.user)));
 
-// ---------- shareholders ----------
+// ---------- participant register ----------
+// Voting tokens are a technical representation of the voting weight each participant has
+// in the verified register — they are not shares and do not replace the official share register.
 app.get('/api/shareholders', auth, adminOnly, (req, res) => {
-  res.json({ shareholders: db.users.filter((u) => u.role === 'shareholder').map(publicUser), totalSupply: totalSupply() });
+  res.json({ shareholders: db.users.filter((u) => u.role === 'shareholder').map(publicUser), totalSupply: totalSupply(), imports: db.data.imports || [] });
 });
 
-function addShareholder(name, email, password, shares) {
+function addShareholder(name, email, password, weight, source = 'Manual entry by administrator') {
   const user = { id: crypto.randomUUID(), name, email, password: hashPassword(password), role: 'shareholder', createdAt: new Date().toISOString() };
   db.users.push(user);
   db.save();
-  // 1 share = 1 voting token, minted on-chain
-  const { block } = chain.addTransaction({ type: 'TOKEN_ISSUE', holder: pseudonym(user.id), amount: shares });
+  // Only a pseudonym and the weight go on-chain; names and emails stay off-chain.
+  const { block } = chain.addTransaction({ type: 'TOKEN_ISSUE', holder: pseudonym(user.id), amount: weight, source });
   return { user, block };
 }
+
+// Bulk import of the participant register (CSV: name,email,weight). The file's hash is
+// recorded on-chain so the source of the voting weights can be traced later.
+app.post('/api/shareholders/import', auth, adminOnly, (req, res) => {
+  const csv = String(req.body?.csv || '').slice(0, 100000);
+  const fileName = str(req.body?.fileName, 120) || 'register.csv';
+  const rows = csv.split(/\r?\n/).map((l) => l.split(/[,;]/).map((c) => c.trim())).filter((r) => r.length >= 3 && r[0]);
+  if (rows.length && !/^\d+$/.test(rows[0][2])) rows.shift(); // header row
+  if (!rows.length || rows.length > 500) return res.status(400).json({ error: 'Provide 1–500 rows: name, email, voting weight' });
+  const seen = new Set(db.users.map((u) => u.email.toLowerCase()));
+  for (const [i, [name, email, weight]] of rows.entries()) {
+    if (!name || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: `Row ${i + 1}: invalid name or email` });
+    if (!/^\d+$/.test(weight) || +weight <= 0 || +weight > 1e9) return res.status(400).json({ error: `Row ${i + 1}: weight must be a positive whole number` });
+    if (seen.has(email.toLowerCase())) return res.status(409).json({ error: `Row ${i + 1}: ${email} is already registered` });
+    seen.add(email.toLowerCase());
+  }
+  const sourceHash = sha256(csv);
+  const { block } = chain.addTransaction({ type: 'REGISTER_IMPORT', fileName, sourceHash, rows: rows.length, totalWeight: rows.reduce((s, r) => s + +r[2], 0) });
+  const created = rows.map(([name, email, weight]) => {
+    const password = crypto.randomBytes(5).toString('hex');
+    addShareholder(str(name, 80), str(email, 120), password, +weight, `Register import ${sourceHash.slice(0, 12)}`);
+    return { name, email, weight: +weight, password };
+  });
+  (db.data.imports ||= []).push({ fileName, sourceHash, rows: rows.length, block: block.index, at: new Date().toISOString() });
+  db.save();
+  res.status(201).json({ created, sourceHash, block: block.index });
+});
 
 app.post('/api/shareholders', auth, adminOnly, (req, res) => {
   const name = str(req.body?.name, 80);
@@ -196,7 +229,7 @@ app.post('/api/shareholders', auth, adminOnly, (req, res) => {
   const shares = Number(req.body?.shares);
   if (!name || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Name and a valid email are required' });
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
-  if (!Number.isInteger(shares) || shares <= 0 || shares > 1e9) return res.status(400).json({ error: 'Shares must be a positive whole number' });
+  if (!Number.isInteger(shares) || shares <= 0 || shares > 1e9) return res.status(400).json({ error: 'Voting weight must be a positive whole number' });
   if (db.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) return res.status(409).json({ error: 'A user with this email already exists' });
   const { user, block } = addShareholder(name, email, password, shares);
   res.status(201).json({ shareholder: publicUser(user), block: block.index });
@@ -211,13 +244,14 @@ app.get('/api/polls/:id', auth, (req, res) => {
   res.json(pollView(poll, req.user));
 });
 
-function createPoll({ title, description, options, kind, quorum, hours }) {
+function createPoll({ title, description, options, kind, mode = 'secret', quorum, hours }) {
   const poll = {
     id: crypto.randomUUID(),
     title,
     description,
     options,
     kind,
+    mode,
     quorum,
     startsAt: new Date().toISOString(),
     endsAt: new Date(Date.now() + hours * 3600e3).toISOString(),
@@ -227,7 +261,7 @@ function createPoll({ title, description, options, kind, quorum, hours }) {
   };
   db.polls.push(poll);
   db.save();
-  chain.addTransaction({ type: 'POLL_CREATED', pollId: poll.id, title, options, kind, quorum, endsAt: poll.endsAt, supply: poll.supplySnapshot, rulesHash: sha256(JSON.stringify(poll)) });
+  chain.addTransaction({ type: 'POLL_CREATED', pollId: poll.id, title, options, kind, mode, quorum, endsAt: poll.endsAt, supply: poll.supplySnapshot, rulesHash: sha256(JSON.stringify(poll)) });
   return poll;
 }
 
@@ -242,6 +276,7 @@ app.post('/api/polls', auth, adminOnly, (req, res) => {
     description: str(req.body?.description, 1000),
     options,
     kind: req.body?.kind === 'special' ? 'special' : 'ordinary',
+    mode: req.body?.mode === 'open' ? 'open' : 'secret',
     quorum: Math.min(Math.max(Number(req.body?.quorum) || 50, 1), 100),
     hours: Math.min(Math.max(Number(req.body?.durationHours) || 72, 0.05), 24 * 60),
   });
@@ -266,10 +301,11 @@ app.get('/api/blind/keys', (req, res) => {
 // Step 1 (authenticated): the shareholder sends BLINDED ballot tokens worth exactly their
 // balance. The server checks eligibility and signs them without being able to see them.
 app.post('/api/polls/:id/credentials', auth, (req, res) => {
-  if (req.user.role !== 'shareholder') return res.status(403).json({ error: 'Only shareholders can vote' });
+  if (req.user.role !== 'shareholder') return res.status(403).json({ error: 'Only registered participants can vote' });
   const poll = db.polls.find((p) => p.id === req.params.id);
   if (!poll) return res.status(404).json({ error: 'Poll not found' });
   if (pollStatus(poll) !== 'active') return res.status(400).json({ error: 'This poll is not open for voting' });
+  if (poll.mode === 'open') return res.status(400).json({ error: 'This is an open (roll-call) vote' });
   if (db.participation.some((x) => x.pollId === poll.id && x.userId === req.user.id))
     return res.status(409).json({ error: 'Ballots for this poll were already issued to you' });
 
@@ -299,6 +335,7 @@ function castBallots(pollId, coins, receipt) {
   const poll = db.polls.find((p) => p.id === pollId);
   if (!poll) throw Object.assign(new Error('Poll not found'), { status: 404 });
   if (pollStatus(poll) !== 'active') throw new Error('This poll is not open for voting');
+  if (poll.mode === 'open') throw new Error('This is an open (roll-call) vote');
   if (!Array.isArray(coins) || !coins.length || coins.length > 200) throw new Error('No ballots supplied');
   if (!/^[0-9a-f]{64}$/.test(receipt)) throw new Error('Invalid receipt hash');
 
@@ -318,6 +355,33 @@ function castBallots(pollId, coins, receipt) {
 app.post('/api/ballots', (req, res) => {
   try {
     const { block } = castBallots(req.body?.pollId, req.body?.coins, str(req.body?.receipt, 64));
+    res.status(201).json({ block: block.index, blockHash: block.hash });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// Open (roll-call) voting: the choice is linked to the participant's ledger pseudonym,
+// as required for e.g. board resolutions. Identity and choice are still kept apart
+// in secret polls, which use the blind-signature flow above.
+function castOpenVote(user, poll, allocation) {
+  if (pollStatus(poll) !== 'active') throw new Error('This poll is not open for voting');
+  if (poll.mode !== 'open') throw new Error('This is a secret ballot');
+  if (db.participation.some((x) => x.pollId === poll.id && x.userId === user.id)) throw Object.assign(new Error('You have already voted in this poll'), { status: 409 });
+  const entries = Object.entries(allocation || {}).map(([c, w]) => [c, Number(w)]).filter(([, w]) => w > 0);
+  if (!entries.length || entries.some(([c, w]) => !poll.options.includes(c) || !Number.isInteger(w))) throw new Error('Invalid vote');
+  if (entries.reduce((s, [, w]) => s + w, 0) !== balanceOf(user.id)) throw new Error('Votes must equal your voting weight');
+  db.participation.push({ pollId: poll.id, userId: user.id, issuedAt: new Date().toISOString() });
+  db.save();
+  return chain.addTransaction({ type: 'VOTE', mode: 'open', pollId: poll.id, voter: pseudonym(user.id), ballots: entries.map(([choice, weight]) => ({ choice, weight })) });
+}
+
+app.post('/api/polls/:id/vote', auth, (req, res) => {
+  if (req.user.role !== 'shareholder') return res.status(403).json({ error: 'Only registered participants can vote' });
+  const poll = db.polls.find((p) => p.id === req.params.id);
+  if (!poll) return res.status(404).json({ error: 'Poll not found' });
+  try {
+    const { block } = castOpenVote(req.user, poll, req.body?.allocation);
     res.status(201).json({ block: block.index, blockHash: block.hash });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
@@ -387,9 +451,10 @@ function summarize(t) {
   const poll = t.pollId && db.polls.find((p) => p.id === t.pollId);
   const base = { type: t.type, timestamp: t.timestamp };
   switch (t.type) {
-    case 'TOKEN_ISSUE': return { ...base, text: `${t.amount.toLocaleString('en-US')} tokens issued to ${t.holder.slice(0, 12)}…` };
+    case 'TOKEN_ISSUE': return { ...base, text: `Voting weight ${t.amount.toLocaleString('en-US')} registered for ${t.holder.slice(0, 12)}…` };
+    case 'REGISTER_IMPORT': return { ...base, text: `Participant register imported: ${t.rows} rows from ${t.fileName}` };
     case 'POLL_CREATED': return { ...base, text: `Poll opened: ${t.title}` };
-    case 'VOTE': return { ...base, text: `Anonymous ballot (${t.ballots.reduce((s, b) => s + b.weight, 0).toLocaleString('en-US')} tokens) in “${poll?.title || 'poll'}”` };
+    case 'VOTE': return { ...base, text: `${t.mode === 'open' ? 'Roll-call vote' : 'Secret ballot'} (${t.ballots.reduce((s, b) => s + b.weight, 0).toLocaleString('en-US')} votes) in “${poll?.title || 'poll'}”` };
     case 'POLL_CLOSED': return { ...base, text: `Poll closed — ${t.decision}` };
     default: return { ...base, text: 'Genesis block — validator set registered' };
   }
@@ -405,6 +470,7 @@ app.get('/api/stats', (req, res) => {
     activePolls: db.polls.filter((p) => pollStatus(p) === 'active').length,
     shareholders: db.users.filter((u) => u.role === 'shareholder').length,
     totalSupply: totalSupply(),
+    org: db.data.org,
     validators: chain.validators.length,
     valid: chain.verify().valid,
   });
@@ -415,12 +481,19 @@ app.get('/api/polls/:id/audit', (req, res) => {
   const poll = db.polls.find((p) => p.id === req.params.id);
   if (!poll) return res.status(404).json({ error: 'Poll not found' });
   const related = chain.transactions((t) => t.pollId === poll.id);
+  const viewer = optionalUser(req);
+  const names = Object.fromEntries(db.users.map((u) => [pseudonym(u.id), u.name]));
   const report = {
-    poll: { id: poll.id, title: poll.title, description: poll.description, options: poll.options, kind: poll.kind, quorum: poll.quorum, startsAt: poll.startsAt, endsAt: poll.endsAt, status: pollStatus(poll) },
+    org: db.data.org,
+    poll: { id: poll.id, title: poll.title, description: poll.description, options: poll.options, kind: poll.kind, mode: poll.mode, quorum: poll.quorum, startsAt: poll.startsAt, endsAt: poll.endsAt, status: pollStatus(poll) },
     results: tally(poll),
     created: related.find((t) => t.type === 'POLL_CREATED'),
     closed: related.find((t) => t.type === 'POLL_CLOSED') || null,
-    votes: related.filter((t) => t.type === 'VOTE').map((t) => ({ id: t.id, timestamp: t.timestamp, block: t.blockIndex, blockHash: t.blockHash, ballots: t.ballots })),
+    votes: related.filter((t) => t.type === 'VOTE').map((t) => ({ id: t.id, timestamp: t.timestamp, block: t.blockIndex, blockHash: t.blockHash, voter: t.voter, ballots: t.ballots })),
+    // Names for a roll-call vote are personal data: only the organizer sees them.
+    rollCall: poll.mode === 'open' && viewer?.role === 'admin'
+      ? related.filter((t) => t.type === 'VOTE').map((t) => ({ name: names[t.voter] || t.voter, ballots: t.ballots }))
+      : null,
     ballotsIssuedTo: db.participation.filter((x) => x.pollId === poll.id).length,
     chain: { ...chain.verify(), head: chain.latest.hash, validators: chain.validators.map((v) => v.name) },
     generatedAt: new Date().toISOString(),
@@ -474,32 +547,33 @@ function seedVote(user, poll, allocation) {
 
 function seed() {
   if (db.users.length) return;
-  db.users.push({ id: crypto.randomUUID(), name: 'Corporate Secretary', email: 'admin@securevote.io', password: hashPassword('admin123'), role: 'admin' });
-  const holders = [
-    ['Alice Johnson', 'alice', 4000],
-    ['Bob Smith', 'bob', 2500],
-    ['Carol White', 'carol', 1500],
-    ['David Brown', 'david', 1200],
-    ['Emma Davis', 'emma', 800],
-  ].map(([name, login, shares]) => addShareholder(name, `${login}@securevote.io`, 'demo123', shares).user);
+  db.data.org = { name: 'Steppe Agro Cooperative', type: 'Agricultural cooperative', city: 'Almaty' };
+  db.users.push({ id: crypto.randomUUID(), name: 'Board Secretary', email: 'admin@securevote.io', password: hashPassword('admin123'), role: 'admin' });
+  const members = [
+    ['Aigerim Sadykova', 'aigerim', 4000],
+    ['Daniyar Akhmetov', 'daniyar', 2500],
+    ['Madina Omarova', 'madina', 1500],
+    ['Yerlan Nurlanov', 'yerlan', 1200],
+    ['Saule Bekova', 'saule', 800],
+  ].map(([name, login, weight]) => addShareholder(name, `${login}@securevote.io`, 'demo123', weight, 'Verified member register, 1 Oct 2026').user);
 
-  const dividend = createPoll({
-    title: 'Approve a final dividend of $1.20 per share for FY2026',
-    description: 'The Board recommends a final dividend of $1.20 per ordinary share, payable on 15 December 2026 to shareholders on the register at 1 December 2026.',
-    options: ['For', 'Against', 'Abstain'], kind: 'ordinary', quorum: 50, hours: 7 * 24,
+  const budget = createPoll({
+    title: 'Approve the 2027 operating budget (48.5 million ₸)',
+    description: 'The Management Board proposes an operating budget of 48.5 million ₸ for 2027, including storage modernisation and member training.',
+    options: ['For', 'Against', 'Abstain'], kind: 'ordinary', mode: 'secret', quorum: 50, hours: 7 * 24,
   });
   createPoll({
-    title: 'Special resolution: amend the Articles to allow virtual general meetings',
-    description: 'Amends Article 14 so that general meetings may be held fully online with blockchain-verified voting. Requires a two-thirds majority.',
-    options: ['For', 'Against', 'Abstain'], kind: 'special', quorum: 60, hours: 5 * 24,
+    title: 'Amend the Charter to allow remote general meetings',
+    description: 'Adds Article 9.4 so that general meetings may be held remotely with electronic voting. Charter amendments require a two-thirds majority. Roll-call vote.',
+    options: ['For', 'Against', 'Abstain'], kind: 'special', mode: 'open', quorum: 60, hours: 5 * 24,
   });
   createPoll({
-    title: 'Elect an independent non-executive director',
-    description: 'Shareholders are asked to elect one independent director to the Board for a three-year term.',
-    options: ['Sarah Mitchell', 'James Carter', 'Linda Okafor'], kind: 'ordinary', quorum: 40, hours: 3 * 24,
+    title: 'Elect the Chair of the Management Board',
+    description: 'Members elect the Chair of the Management Board for a three-year term by secret ballot.',
+    options: ['Aslan Zhaksybekov', 'Gulnara Iskakova', 'Timur Abenov'], kind: 'ordinary', mode: 'secret', quorum: 40, hours: 3 * 24,
   });
-  seedVote(holders[3], dividend, { For: 1000, Against: 200 }); // split vote
-  seedVote(holders[4], dividend, { Against: 800 });
+  seedVote(members[3], budget, { For: 1000, Against: 200 }); // split vote
+  seedVote(members[4], budget, { Against: 800 });
   console.log('Demo data created.');
 }
 
