@@ -10,6 +10,22 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const SESSION_TTL = 8 * 3600e3;
 const THRESHOLDS = { ordinary: 0.5, special: 2 / 3 };
+const DATA_VERSION = 2;
+
+// Data written by an older version of SecureVote has a different format.
+// Move it aside to a backup folder and start with fresh demo data.
+const VERSION_FILE = path.join(DATA_DIR, 'version.json');
+if (fs.existsSync(DATA_DIR) && fs.readdirSync(DATA_DIR).length) {
+  let version = 0;
+  try { version = JSON.parse(fs.readFileSync(VERSION_FILE, 'utf8')).version; } catch {}
+  if (version !== DATA_VERSION) {
+    const backup = `${DATA_DIR}-backup-${Date.now()}`;
+    fs.renameSync(DATA_DIR, backup);
+    console.log(`Old data format found — moved it to ${path.basename(backup)} and created a fresh demo.`);
+  }
+}
+fs.mkdirSync(DATA_DIR, { recursive: true });
+fs.writeFileSync(VERSION_FILE, JSON.stringify({ version: DATA_VERSION }));
 
 // ---------- keys: validator nodes + one blind-signing key per token denomination ----------
 const KEYS_FILE = path.join(DATA_DIR, 'keys.json');
@@ -489,4 +505,8 @@ function seed() {
 
 seed();
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(err.status || 500).json({ error: err.status ? err.message : 'Internal server error' });
+});
 app.listen(PORT, () => console.log(`SecureVote running on http://localhost:${PORT}`));
