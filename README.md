@@ -53,6 +53,16 @@ npm start          # http://localhost:3000
 ```
 > Windows PowerShell: if you see "выполнение сценариев отключено", use `npm.cmd install` and `npm.cmd start`.
 
+## Publish online (free)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/westnur/securevote)
+
+1. Sign in to [render.com](https://render.com) with GitHub.
+2. Click the button above (or **New → Blueprint** and choose this repository) → **Apply**.
+3. After 2–3 minutes the site is live at `https://securevote-xxxx.onrender.com`.
+
+On the free plan the site sleeps after 15 minutes without visitors (the first visit then takes ~1 minute)
+and the demo data is reset on each restart.
+
 ## Demo accounts
 | Role | Email | Password |
 |------|-------|----------|

@@ -52,6 +52,7 @@ const sessions = new Map(); // token -> { userId, expires }
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', 1); // correct client IPs behind a hosting proxy (rate limiting)
 app.use(express.json({ limit: '200kb' }));
 app.use((req, res, next) => {
   res.set({
